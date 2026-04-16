@@ -1,10 +1,10 @@
 import type { ErrorRequestHandler } from "express";
 
 import { Prisma } from "@prisma/client";
-import { ZodError } from "zod";
 
 import { env } from "../config/env";
-import { ApiError } from "../lib/errors/api-error";
+import { AppError } from "../utils/app-error";
+import { logger } from "../utils/logger";
 
 export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
   if (res.headersSent) {
@@ -12,21 +12,11 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
     return;
   }
 
-  if (error instanceof ApiError) {
+  if (error instanceof AppError) {
     res.status(error.statusCode).json({
       error: {
         message: error.message,
         details: error.details
-      }
-    });
-    return;
-  }
-
-  if (error instanceof ZodError) {
-    res.status(400).json({
-      error: {
-        message: "Request validation failed.",
-        details: error.flatten()
       }
     });
     return;
@@ -44,13 +34,12 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
     }
   }
 
-  console.error(error);
+  logger.error("Unhandled application error.", error);
 
   res.status(500).json({
     error: {
       message: "Internal server error.",
-      details: env.NODE_ENV === "development" ? String(error) : undefined
+      details: env.nodeEnv === "development" ? String(error) : undefined
     }
   });
 };
-

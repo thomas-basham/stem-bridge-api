@@ -9,144 +9,52 @@ datasource db {
 
 enum ProjectRole {
   OWNER
-  EDITOR
-  VIEWER
-}
-
-enum VersionFileKind {
-  PROJECT_FILE
-  STEM
-  MIXDOWN
-  MIDI
-  SAMPLE
-  OTHER
-}
-
-enum VersionFileUploadStatus {
-  PENDING
-  UPLOADED
-  FAILED
+  COLLABORATOR
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  email              String              @unique
-  passwordHash       String
-  displayName        String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  ownedProjects      Project[]           @relation("ProjectOwner")
-  projectMemberships ProjectMember[]
-  sentInvitations    ProjectInvitation[] @relation("InvitationSender")
-  versionsCreated    Version[]           @relation("VersionCreator")
-  versionFiles       VersionFile[]       @relation("VersionFileUploader")
-  comments           VersionComment[]
-  refreshTokens      RefreshToken[]
-}
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  id          String          @id @default(uuid())
+  email       String          @unique
+  displayName String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  projects    ProjectMember[]
+  versions    Version[]
 }
 
 model Project {
-  id          String              @id @default(uuid())
+  id          String          @id @default(uuid())
   name        String
   description String?
-  ownerId     String
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  owner       User                @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   members     ProjectMember[]
-  invitations ProjectInvitation[]
   versions    Version[]
 }
 
 model ProjectMember {
-  id          String      @id @default(uuid())
-  projectId   String
-  userId      String
-  role        ProjectRole
-  invitedById String?
-  joinedAt    DateTime    @default(now())
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String      @id @default(uuid())
+  projectId String
+  userId    String
+  role      ProjectRole
+  joinedAt  DateTime    @default(now())
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
-  @@index([userId])
-}
-
-model ProjectInvitation {
-  id          String      @id @default(uuid())
-  projectId   String
-  email       String
-  role        ProjectRole
-  tokenHash   String      @unique
-  invitedById String?
-  acceptedAt  DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime    @default(now())
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  invitedBy   User?       @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
-
-  @@index([projectId, email])
 }
 
 model Version {
-  id          String           @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
-  createdById String
-  label       String
+  userId      String
+  title       String
   notes       String?
-  sourceDaw   String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User             @relation("VersionCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  files       VersionFile[]
-  comments    VersionComment[]
+  fileUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
 }
-
-model VersionFile {
-  id              String                  @id @default(uuid())
-  versionId       String
-  uploadedById    String
-  kind            VersionFileKind
-  position        Int
-  fileName        String
-  originalFileName String
-  storageKey      String                  @unique
-  contentType     String
-  sizeBytes       Int
-  uploadStatus    VersionFileUploadStatus @default(PENDING)
-  uploadedAt      DateTime?
-  createdAt       DateTime                @default(now())
-  version         Version                 @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  uploadedBy      User                    @relation("VersionFileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  @@index([versionId, position])
-}
-
-model VersionComment {
-  id          String   @id @default(uuid())
-  versionId   String
-  authorId    String
-  body        String
-  timestampMs Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  version     Version  @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([versionId, createdAt])
-}
-

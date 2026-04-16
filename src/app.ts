@@ -4,33 +4,40 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env";
+import { healthRouter } from "./modules/health/health.routes";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
-import { apiRouter } from "./routes";
+import { logger } from "./utils/logger";
 
 const app = express();
 
+app.disable("x-powered-by");
+app.set("trust proxy", env.nodeEnv === "production" ? 1 : 0);
+
 app.use(helmet());
 app.use(
-  cors(
-    env.CLIENT_ORIGIN
-      ? {
-          origin: env.CLIENT_ORIGIN,
-          credentials: true
-        }
-      : undefined
-  )
+  cors({
+    origin: env.clientOrigin === "*" ? true : env.clientOrigin,
+    credentials: env.clientOrigin !== "*"
+  })
 );
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-if (env.NODE_ENV !== "test") {
-  app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+if (env.nodeEnv !== "test") {
+  app.use(
+    morgan(env.nodeEnv === "production" ? "combined" : "dev", {
+      stream: {
+        write: (message) => {
+          logger.http(message.trim());
+        }
+      }
+    })
+  );
 }
 
-app.use("/api", apiRouter);
+app.use("/health", healthRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 export { app };
-

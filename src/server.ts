@@ -1,16 +1,17 @@
 import { app } from "./app";
 import { env } from "./config/env";
-import { prisma } from "./database/prisma";
+import { prisma } from "./config/prisma";
+import { logger } from "./utils/logger";
 
 const startServer = async () => {
   await prisma.$connect();
 
-  const server = app.listen(env.PORT, () => {
-    console.log(`StemBridge API listening on port ${env.PORT}.`);
+  const server = app.listen(env.port, () => {
+    logger.info(`StemBridge API listening on port ${env.port}.`);
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`Received ${signal}. Shutting down.`);
+    logger.info(`Received ${signal}. Shutting down.`);
 
     server.close(async () => {
       await prisma.$disconnect();
@@ -27,16 +28,16 @@ const startServer = async () => {
   });
 
   process.on("unhandledRejection", (error) => {
-    console.error("Unhandled rejection:", error);
+    logger.error("Unhandled rejection.", error);
   });
 
   process.on("uncaughtException", (error) => {
-    console.error("Uncaught exception:", error);
+    logger.error("Uncaught exception.", error);
   });
 };
 
 void startServer().catch(async (error) => {
-  console.error("Failed to start server:", error);
+  logger.error("Failed to start server.", error);
   await prisma.$disconnect();
   process.exit(1);
 });
