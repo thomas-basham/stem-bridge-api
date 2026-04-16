@@ -7,54 +7,157 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ProjectRole {
-  OWNER
-  COLLABORATOR
+enum FileAssetType {
+  PROJECT_FILE
+  STEM
+  MIXDOWN
+  MIDI
+  SAMPLE
+  REFERENCE
+  OTHER
+}
+
+enum ActivityEventType {
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  INVITE_SENT
+  INVITE_ACCEPTED
+  VERSION_CREATED
+  FILE_UPLOADED
+  COMMENT_ADDED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
 }
 
 model User {
-  id          String          @id @default(uuid())
-  email       String          @unique
-  displayName String
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  projects    ProjectMember[]
-  versions    Version[]
+  id                 String          @id @default(uuid())
+  email              String          @unique
+  passwordHash       String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  ownedProjects      Project[]       @relation("ProjectOwner")
+  projectMemberships ProjectMember[]
+  createdVersions    SongVersion[]   @relation("SongVersionCreator")
+  comments           Comment[]
+  sentInvites        Invite[]        @relation("InviteSender")
+
+  @@index([createdAt])
 }
 
 model Project {
-  id          String          @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  members     ProjectMember[]
-  versions    Version[]
+  id             String          @id @default(uuid())
+  name           String
+  bpm            Int?
+  musicalKey     String?
+  ownerId        String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  owner          User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members        ProjectMember[]
+  songVersions   SongVersion[]
+  activityEvents ActivityEvent[]
+  invites        Invite[]
+
+  @@index([ownerId])
+  @@index([createdAt])
 }
 
 model ProjectMember {
-  id        String      @id @default(uuid())
+  id        String   @id @default(uuid())
   projectId String
   userId    String
-  role      ProjectRole
-  joinedAt  DateTime    @default(now())
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
 }
 
-model Version {
-  id          String   @id @default(uuid())
-  projectId   String
-  userId      String
-  title       String
-  notes       String?
-  fileUrl     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model SongVersion {
+  id            String      @id @default(uuid())
+  projectId     String
+  versionNumber Int
+  notes         String?
+  createdById   String
+  createdAt     DateTime    @default(now())
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User        @relation("SongVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  fileAssets    FileAsset[]
+  comments      Comment[]
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model FileAsset {
+  id            String        @id @default(uuid())
+  songVersionId String
+  name          String
+  originalName  String
+  type          FileAssetType
+  mimeType      String
+  sizeBytes     Int
+  storageKey    String        @unique
+  url           String
+  createdAt     DateTime      @default(now())
+  songVersion   SongVersion   @relation(fields: [songVersionId], references: [id], onDelete: Cascade)
+
+  @@index([songVersionId, createdAt])
+  @@index([songVersionId, type])
+}
+
+model Comment {
+  id               String      @id @default(uuid())
+  songVersionId    String
+  userId           String
+  timestampSeconds Decimal
+  text             String
+  createdAt        DateTime    @default(now())
+  songVersion      SongVersion @relation(fields: [songVersionId], references: [id], onDelete: Cascade)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([songVersionId, createdAt])
+  @@index([songVersionId, timestampSeconds])
+  @@index([userId, createdAt])
+}
+
+model ActivityEvent {
+  id        String            @id @default(uuid())
+  projectId String
+  type      ActivityEventType
+  metadata  Json
+  createdAt DateTime          @default(now())
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
+  @@index([projectId, type, createdAt])
+}
+
+model Invite {
+  id          String       @id @default(uuid())
+  projectId   String
+  email       String
+  token       String       @unique
+  status      InviteStatus @default(PENDING)
+  invitedById String
+  createdAt   DateTime     @default(now())
+  expiresAt   DateTime
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invitedBy   User         @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+  @@index([projectId, email])
+  @@index([status, expiresAt])
+  @@index([invitedById])
 }
