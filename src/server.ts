@@ -1,6 +1,6 @@
 import { app } from "./app";
 import { env } from "./config/env";
-import { prisma } from "./config/prisma";
+import { prisma } from "./lib/prisma";
 import { logger } from "./utils/logger";
 
 const startServer = async () => {

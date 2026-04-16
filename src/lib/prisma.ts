@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-import { env } from "./env";
+import { env } from "../config/env";
 
 type GlobalPrisma = typeof globalThis & {
   __prisma?: PrismaClient;

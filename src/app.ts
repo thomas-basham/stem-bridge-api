@@ -17,8 +17,8 @@ app.set("trust proxy", env.nodeEnv === "production" ? 1 : 0);
 app.use(helmet());
 app.use(
   cors({
-    origin: env.clientOrigin === "*" ? true : env.clientOrigin,
-    credentials: env.clientOrigin !== "*"
+    origin: env.appBaseUrl,
+    credentials: true
   })
 );
 app.use(express.json({ limit: "1mb" }));
