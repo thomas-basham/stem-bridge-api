@@ -8,6 +8,7 @@ import { authRouter } from "./modules/auth/auth.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { inviteRouter, projectInviteRouter } from "./modules/invite/invite.routes";
 import { projectRouter } from "./modules/project/project.routes";
+import { projectVersionRouter, versionRouter } from "./modules/version/version.routes";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
 import { logger } from "./utils/logger";
@@ -43,7 +44,9 @@ app.use("/auth", authRouter);
 app.use("/health", healthRouter);
 app.use("/invites", inviteRouter);
 app.use("/projects/:projectId/invites", projectInviteRouter);
+app.use("/projects/:projectId/versions", projectVersionRouter);
 app.use("/projects", projectRouter);
+app.use("/versions", versionRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
