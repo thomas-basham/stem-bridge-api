@@ -6,6 +6,7 @@ import morgan from "morgan";
 import { env } from "./config/env";
 import { authRouter } from "./modules/auth/auth.routes";
 import { healthRouter } from "./modules/health/health.routes";
+import { projectRouter } from "./modules/project/project.routes";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
 import { logger } from "./utils/logger";
@@ -39,6 +40,7 @@ if (env.nodeEnv !== "test") {
 
 app.use("/auth", authRouter);
 app.use("/health", healthRouter);
+app.use("/projects", projectRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
