@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from "express";
+import multer from "multer";
 
 import { Prisma } from "../generated/prisma/client";
 
@@ -32,6 +33,19 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
       });
       return;
     }
+  }
+
+  if (error instanceof multer.MulterError) {
+    res.status(400).json({
+      error: {
+        message: "File upload validation failed.",
+        details: {
+          code: error.code,
+          field: error.field
+        }
+      }
+    });
+    return;
   }
 
   logger.error("Unhandled application error.", error);
