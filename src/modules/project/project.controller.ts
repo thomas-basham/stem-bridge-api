@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 
 import { asyncHandler } from "../../utils/async-handler";
-import type { ProjectParamsInput } from "./project.schemas";
 import { createProject, getProjectById, getProjectsForUser } from "./project.service";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -15,7 +14,6 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getById = asyncHandler(async (req: Request, res: Response) => {
-  const { projectId } = req.params as ProjectParamsInput;
-  const result = await getProjectById(req.auth!.sub, projectId);
+  const result = await getProjectById(req.projectAccess!.projectId);
   res.status(200).json(result);
 });

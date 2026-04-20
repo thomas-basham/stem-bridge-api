@@ -125,16 +125,9 @@ const toLatestVersion = (
   };
 };
 
-const getProjectRecord = async (userId: string, projectId: string) => {
-  const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      members: {
-        some: {
-          userId
-        }
-      }
-    },
+const getProjectRecord = async (projectId: string) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
     select: projectDetailSelect
   });
 
@@ -163,7 +156,7 @@ export const createProject = async (userId: string, input: CreateProjectInput) =
     }
   });
 
-  return getProjectById(userId, project.id);
+  return getProjectById(project.id);
 };
 
 export const getProjectsForUser = async (userId: string) => {
@@ -194,8 +187,8 @@ export const getProjectsForUser = async (userId: string) => {
   };
 };
 
-export const getProjectById = async (userId: string, projectId: string) => {
-  const project = await getProjectRecord(userId, projectId);
+export const getProjectById = async (projectId: string) => {
+  const project = await getProjectRecord(projectId);
 
   return {
     project: {
