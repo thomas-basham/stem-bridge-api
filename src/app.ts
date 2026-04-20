@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env";
+import { projectActivityRouter } from "./modules/activity/activity.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { commentRouter, versionCommentRouter } from "./modules/comment/comment.routes";
 import { versionFileAssetRouter } from "./modules/file-asset/file-asset.routes";
@@ -46,6 +47,7 @@ app.use("/auth", authRouter);
 app.use("/comments", commentRouter);
 app.use("/health", healthRouter);
 app.use("/invites", inviteRouter);
+app.use("/projects/:projectId/activity", projectActivityRouter);
 app.use("/projects/:projectId/invites", projectInviteRouter);
 app.use("/projects/:projectId/versions", projectVersionRouter);
 app.use("/projects", projectRouter);
