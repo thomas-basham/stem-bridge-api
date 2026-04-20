@@ -1,6 +1,6 @@
 # StemBridge API
 
-Production-ready Express backend scaffold in TypeScript for StemBridge, a music collaboration app for sharing projects, versions, and feedback between producers.
+Express backend scaffold in TypeScript for StemBridge, a music collaboration app for sharing projects, versions, and feedback between producers.
 
 ## Stack
 
