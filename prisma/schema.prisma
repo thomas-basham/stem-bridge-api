@@ -10,12 +10,10 @@ datasource db {
 }
 
 enum FileAssetType {
-  PROJECT_FILE
   STEM
-  MIXDOWN
+  MIX
   MIDI
   SAMPLE
-  REFERENCE
   OTHER
 }
 

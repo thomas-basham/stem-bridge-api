@@ -5,6 +5,7 @@ import morgan from "morgan";
 
 import { env } from "./config/env";
 import { authRouter } from "./modules/auth/auth.routes";
+import { versionFileAssetRouter } from "./modules/file-asset/file-asset.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { inviteRouter, projectInviteRouter } from "./modules/invite/invite.routes";
 import { projectRouter } from "./modules/project/project.routes";
@@ -46,6 +47,7 @@ app.use("/invites", inviteRouter);
 app.use("/projects/:projectId/invites", projectInviteRouter);
 app.use("/projects/:projectId/versions", projectVersionRouter);
 app.use("/projects", projectRouter);
+app.use("/versions/:versionId/files", versionFileAssetRouter);
 app.use("/versions", versionRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
