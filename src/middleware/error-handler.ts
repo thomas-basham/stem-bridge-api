@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler } from "express";
 
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../generated/prisma/client";
 
 import { env } from "../config/env";
 import { AppError } from "../utils/app-error";
