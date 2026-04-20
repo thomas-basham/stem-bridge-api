@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 
 import { asyncHandler } from "../../utils/async-handler";
 import { AppError } from "../../utils/app-error";
+import { sendSuccess } from "../../utils/response";
 import {
   createFileAssetMetadata,
   listFileAssetsForVersion,
@@ -14,12 +15,12 @@ export const createMetadata = asyncHandler(async (req: Request, res: Response) =
     req.versionAccess!.projectId,
     req.body
   );
-  res.status(201).json(result);
+  sendSuccess(res, 201, "File metadata created successfully", result);
 });
 
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const result = await listFileAssetsForVersion(req.versionAccess!.versionId);
-  res.status(200).json(result);
+  sendSuccess(res, 200, "Files retrieved successfully", result);
 });
 
 export const upload = asyncHandler(async (req: Request, res: Response) => {
@@ -34,5 +35,5 @@ export const upload = asyncHandler(async (req: Request, res: Response) => {
     input: req.body
   });
 
-  res.status(201).json(result);
+  sendSuccess(res, 201, "File uploaded successfully", result);
 });

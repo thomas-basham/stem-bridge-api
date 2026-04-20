@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 
+import { sendSuccess } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import type { ProjectActivityQueryInput } from "./activity.schemas";
 import { listProjectActivity } from "./activity.service";
@@ -9,5 +10,5 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     req.projectAccess!.projectId,
     req.query as unknown as ProjectActivityQueryInput
   );
-  res.status(200).json(result);
+  sendSuccess(res, 200, "Activity feed retrieved successfully", result);
 });

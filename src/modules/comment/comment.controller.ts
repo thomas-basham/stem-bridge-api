@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 
 import { asyncHandler } from "../../utils/async-handler";
+import { sendSuccess } from "../../utils/response";
 import { createComment, deleteCommentById, listCommentsForVersion } from "./comment.service";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -10,15 +11,15 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     req.auth!.sub,
     req.body
   );
-  res.status(201).json(result);
+  sendSuccess(res, 201, "Comment created successfully", result);
 });
 
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const result = await listCommentsForVersion(req.versionAccess!.versionId);
-  res.status(200).json(result);
+  sendSuccess(res, 200, "Comments retrieved successfully", result);
 });
 
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   const result = await deleteCommentById(req.commentAccess!.commentId);
-  res.status(200).json(result);
+  sendSuccess(res, 200, "Comment deleted successfully", result);
 });
