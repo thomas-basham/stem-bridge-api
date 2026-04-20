@@ -5,6 +5,7 @@ import morgan from "morgan";
 
 import { env } from "./config/env";
 import { authRouter } from "./modules/auth/auth.routes";
+import { commentRouter, versionCommentRouter } from "./modules/comment/comment.routes";
 import { versionFileAssetRouter } from "./modules/file-asset/file-asset.routes";
 import { healthRouter } from "./modules/health/health.routes";
 import { inviteRouter, projectInviteRouter } from "./modules/invite/invite.routes";
@@ -42,11 +43,13 @@ if (env.nodeEnv !== "test") {
 }
 
 app.use("/auth", authRouter);
+app.use("/comments", commentRouter);
 app.use("/health", healthRouter);
 app.use("/invites", inviteRouter);
 app.use("/projects/:projectId/invites", projectInviteRouter);
 app.use("/projects/:projectId/versions", projectVersionRouter);
 app.use("/projects", projectRouter);
+app.use("/versions/:versionId/comments", versionCommentRouter);
 app.use("/versions/:versionId/files", versionFileAssetRouter);
 app.use("/versions", versionRouter);
 app.use(notFoundHandler);
