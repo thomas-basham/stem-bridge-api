@@ -1,7 +1,15 @@
 import type { Prisma } from "../../generated/prisma/client";
 import { ActivityEventType } from "../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
-import type { CreateFileAssetMetadataInput } from "./file-asset.schemas";
+import {
+  buildVersionFileStorageKey,
+  deleteFileObject,
+  getPublicFileUrl,
+  sanitizeFileName,
+  uploadFileBuffer
+} from "../../lib/storage/s3";
+import { AppError } from "../../utils/app-error";
+import type { CreateFileAssetMetadataInput, UploadFileAssetInput } from "./file-asset.schemas";
 
 const fileAssetSelect = {
   id: true,
@@ -42,7 +50,7 @@ const toFileAsset = (fileAsset: {
   };
 };
 
-export const createFileAssetMetadata = async (
+const createFileAssetRecord = async (
   versionId: string,
   projectId: string,
   input: CreateFileAssetMetadataInput
@@ -82,6 +90,65 @@ export const createFileAssetMetadata = async (
   return {
     file: toFileAsset(fileAsset)
   };
+};
+
+export const createFileAssetMetadata = async (
+  versionId: string,
+  projectId: string,
+  input: CreateFileAssetMetadataInput
+) => {
+  return createFileAssetRecord(versionId, projectId, input);
+};
+
+export const uploadVersionFile = async (params: {
+  versionId: string;
+  projectId: string;
+  file: Express.Multer.File;
+  input: UploadFileAssetInput;
+}) => {
+  if (!params.file.buffer || params.file.size === 0) {
+    throw new AppError(400, "Uploaded file is empty.");
+  }
+
+  const storageKey = buildVersionFileStorageKey(
+    params.projectId,
+    params.versionId,
+    params.file.originalname
+  );
+  const safeName = sanitizeFileName(params.file.originalname);
+  const fileUrl = getPublicFileUrl(storageKey);
+
+  try {
+    await uploadFileBuffer({
+      buffer: params.file.buffer,
+      storageKey,
+      contentType: params.file.mimetype || "application/octet-stream"
+    });
+  } catch (error) {
+    throw new AppError(502, "Failed to upload file to storage.", {
+      reason: error instanceof Error ? error.message : "Unknown storage error"
+    });
+  }
+
+  try {
+    return await createFileAssetRecord(params.versionId, params.projectId, {
+      name: safeName,
+      originalName: params.file.originalname,
+      type: params.input.type,
+      mimeType: params.file.mimetype || "application/octet-stream",
+      sizeBytes: params.file.size,
+      storageKey,
+      url: fileUrl
+    });
+  } catch (error) {
+    try {
+      await deleteFileObject(storageKey);
+    } catch {
+      // Ignore cleanup failures and surface the original database error instead.
+    }
+
+    throw error;
+  }
 };
 
 export const listFileAssetsForVersion = async (versionId: string) => {
