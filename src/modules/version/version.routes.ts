@@ -23,6 +23,12 @@ projectVersionRouter.get("/", versionController.list);
 
 versionRouter.use(authenticate);
 versionRouter.get(
+  "/:versionId/download",
+  validateParams(versionParamsSchema),
+  ensureVersionMember,
+  versionController.download
+);
+versionRouter.get(
   "/:versionId",
   validateParams(versionParamsSchema),
   ensureVersionMember,

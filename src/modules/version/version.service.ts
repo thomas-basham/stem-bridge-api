@@ -1,5 +1,8 @@
+import path from "node:path";
+
 import { ActivityEventType, Prisma } from "../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
+import { sanitizeFileName } from "../../lib/storage/s3";
 import { AppError } from "../../utils/app-error";
 import type { CreateVersionInput } from "./version.schemas";
 
@@ -144,6 +147,34 @@ const getVersionRecord = async (versionId: string) => {
   return version;
 };
 
+const sanitizeArchiveEntryName = (fileName: string) => {
+  const baseName = path.basename(fileName).replace(/\0/g, "").trim();
+  const withoutSeparators = baseName.replace(/[\\/]/g, "-");
+  const normalizedWhitespace = withoutSeparators.replace(/\s+/g, " ");
+
+  if (normalizedWhitespace.length > 0) {
+    return normalizedWhitespace;
+  }
+
+  return sanitizeFileName(fileName);
+};
+
+const buildUniqueArchiveName = (fileName: string, usedNames: Set<string>) => {
+  const ext = path.extname(fileName);
+  const baseName = path.basename(fileName, ext);
+  let candidate = fileName;
+  let duplicateIndex = 2;
+
+  while (usedNames.has(candidate.toLowerCase())) {
+    candidate = `${baseName} (${duplicateIndex})${ext}`;
+    duplicateIndex += 1;
+  }
+
+  usedNames.add(candidate.toLowerCase());
+
+  return candidate;
+};
+
 export const createVersion = async (
   projectId: string,
   createdById: string,
@@ -238,5 +269,55 @@ export const getVersionById = async (versionId: string) => {
       fileAssets: version.fileAssets.map(toFileAsset),
       comments: version.comments.map(toComment)
     }
+  };
+};
+
+export const getVersionDownloadBundle = async (versionId: string) => {
+  const version = await prisma.songVersion.findUnique({
+    where: {
+      id: versionId
+    },
+    select: {
+      id: true,
+      versionNumber: true,
+      project: {
+        select: {
+          name: true
+        }
+      },
+      fileAssets: {
+        orderBy: [{ createdAt: "asc" }, { originalName: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          originalName: true,
+          storageKey: true
+        }
+      }
+    }
+  });
+
+  if (!version) {
+    throw new AppError(404, "Version not found.");
+  }
+
+  if (version.fileAssets.length === 0) {
+    throw new AppError(404, "No files are available for this version.");
+  }
+
+  const usedArchiveNames = new Set<string>();
+  const zipFileName = `${sanitizeFileName(version.project.name)}-v${version.versionNumber}.zip`;
+
+  return {
+    zipFileName,
+    files: version.fileAssets.map((file) => {
+      const readableName = sanitizeArchiveEntryName(file.originalName || file.name || file.id);
+
+      return {
+        id: file.id,
+        storageKey: file.storageKey,
+        archiveName: buildUniqueArchiveName(readableName, usedArchiveNames)
+      };
+    })
   };
 };

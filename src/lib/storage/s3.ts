@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { Readable } from "node:stream";
 
 import {
   DeleteObjectCommand,
@@ -78,6 +79,21 @@ export const getSignedFileUrl = async (storageKey: string, expiresInSeconds = 90
       expiresIn: expiresInSeconds
     }
   );
+};
+
+export const getFileStream = async (storageKey: string): Promise<Readable> => {
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: env.s3Bucket,
+      Key: storageKey
+    })
+  );
+
+  if (!response.Body) {
+    throw new Error(`S3 object body was empty for key ${storageKey}.`);
+  }
+
+  return response.Body as Readable;
 };
 
 export const deleteFileObject = async (storageKey: string) => {
