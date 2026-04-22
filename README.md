@@ -58,6 +58,8 @@ The server exposes a health check at `GET /health`.
 
 - `npm run dev`
 - `npm run build`
+- `npm run test`
+- `npm run test:watch`
 - `npm run start`
 - `npm run typecheck`
 - `npm run lint`
@@ -71,6 +73,21 @@ The server exposes a health check at `GET /health`.
 ## Notes
 
 - `src/config/env.ts` validates required environment variables at startup.
-- `src/config/prisma.ts` provides a shared Prisma client instance.
+- `src/lib/prisma.ts` provides a shared Prisma client instance.
 - `src/middleware/error-handler.ts` centralizes application and Prisma error handling.
 - `src/modules/health` is the first feature module and can be used as the pattern for additional modules.
+- Tests use Vitest + Supertest with an in-memory mocked Prisma strategy, so they do not require a live PostgreSQL or S3 instance.
+
+## Running Tests
+
+Run the backend tests with:
+
+```bash
+npm run test
+```
+
+For watch mode:
+
+```bash
+npm run test:watch
+```
