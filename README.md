@@ -1,6 +1,8 @@
 # StemBridge API
 
-Express backend scaffold in TypeScript for StemBridge, a music collaboration app for sharing projects, versions, and feedback between producers.
+Backend for StemBridge, a music collaboration app for producers working across projects, versions, files, comments, invites, and activity history.
+
+The API is built with Express, TypeScript, Prisma, PostgreSQL, JWT auth, and S3-backed file storage.
 
 ## Stack
 
@@ -9,10 +11,8 @@ Express backend scaffold in TypeScript for StemBridge, a music collaboration app
 - TypeScript
 - Prisma
 - PostgreSQL
-- ESLint
-- Prettier
-- dotenv
-- tsx
+- Vitest + Supertest
+- AWS S3
 
 ## Project Structure
 
@@ -21,73 +21,410 @@ src/
   app.ts
   server.ts
   config/
+  lib/
   middleware/
   modules/
   utils/
+prisma/
+  schema.prisma
+  seed.ts
+tests/
 ```
 
-## Getting Started
+## Setup
 
-1. Install dependencies:
+1. Install dependencies
 
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
-2. Copy the environment file:
+2. Copy the env file
 
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+cp .env.example .env
+```
 
-3. Generate Prisma client:
+3. Generate the Prisma client
 
-   ```bash
-   npm run prisma:generate
-   ```
+```bash
+npm run prisma:generate
+```
 
-4. Start the development server:
+## Environment Variables
 
-   ```bash
-   npm run dev
-   ```
+```dotenv
+NODE_ENV=development
+PORT=4000
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/stembridge?schema=public"
+JWT_SECRET="replace-with-a-long-random-string"
+JWT_EXPIRES_IN=7d
+CORS_ORIGINS=http://localhost:3000
+JSON_BODY_LIMIT=1mb
+URL_ENCODED_BODY_LIMIT=100kb
+AUTH_RATE_LIMIT_WINDOW_MS=900000
+AUTH_RATE_LIMIT_MAX=10
+UPLOAD_FILE_SIZE_LIMIT_BYTES=104857600
+S3_REGION=us-east-1
+S3_BUCKET=stembridge-dev
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+APP_BASE_URL=http://localhost:4000
+```
 
-The server exposes a health check at `GET /health`.
+Notes:
 
-## Available Scripts
+- `CORS_ORIGINS` is a comma-separated allowlist.
+- `DATABASE_URL` is used by Prisma and the runtime client.
+- `UPLOAD_FILE_SIZE_LIMIT_BYTES` controls multer memory upload limits.
+- `APP_BASE_URL` is used when building app-facing URLs.
 
-- `npm run dev`
-- `npm run build`
-- `npm run test`
-- `npm run test:watch`
-- `npm run start`
-- `npm run typecheck`
-- `npm run lint`
-- `npm run lint:fix`
-- `npm run format`
-- `npm run format:check`
-- `npm run prisma:generate`
-- `npm run prisma:migrate`
-- `npm run prisma:studio`
+## Database
 
-## Notes
+Run migrations:
 
-- `src/config/env.ts` validates required environment variables at startup.
-- `src/lib/prisma.ts` provides a shared Prisma client instance.
-- `src/middleware/error-handler.ts` centralizes application and Prisma error handling.
-- `src/modules/health` is the first feature module and can be used as the pattern for additional modules.
-- Tests use Vitest + Supertest with an in-memory mocked Prisma strategy, so they do not require a live PostgreSQL or S3 instance.
+```bash
+npm run prisma:migrate
+```
 
-## Running Tests
+Seed demo data:
 
-Run the backend tests with:
+```bash
+npm run prisma:seed
+```
+
+Open Prisma Studio:
+
+```bash
+npm run prisma:studio
+```
+
+## Running The API
+
+Start the dev server:
+
+```bash
+npm run dev
+```
+
+Build the project:
+
+```bash
+npm run build
+```
+
+Start the built server:
+
+```bash
+npm run start
+```
+
+Run tests:
 
 ```bash
 npm run test
 ```
 
-For watch mode:
+## API Conventions
 
-```bash
-npm run test:watch
+Success responses:
+
+```json
+{
+  "message": "Project created successfully",
+  "data": {}
+}
+```
+
+Error responses:
+
+```json
+{
+  "message": "Validation failed",
+  "details": {}
+}
+```
+
+Protected routes require:
+
+```http
+Authorization: Bearer <jwt>
+```
+
+## Endpoint Summary
+
+### Health
+
+- `GET /health`
+
+### Auth
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+
+### Projects
+
+- `POST /projects`
+- `GET /projects`
+- `GET /projects/:projectId`
+
+### Invites
+
+- `POST /projects/:projectId/invites`
+- `GET /projects/:projectId/invites`
+- `POST /invites/:token/accept`
+
+### Song Versions
+
+- `POST /projects/:projectId/versions`
+- `GET /projects/:projectId/versions`
+- `GET /versions/:versionId`
+- `GET /versions/:versionId/download`
+
+### File Assets
+
+- `POST /versions/:versionId/files/upload`
+- `POST /versions/:versionId/files/metadata`
+- `GET /versions/:versionId/files`
+
+### Comments
+
+- `POST /versions/:versionId/comments`
+- `GET /versions/:versionId/comments`
+- `DELETE /comments/:commentId`
+
+### Activity Feed
+
+- `GET /projects/:projectId/activity?page=1&pageSize=20`
+
+## Example Payloads
+
+### Register User
+
+Request:
+
+```http
+POST /auth/register
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "producer@stembridge.dev",
+  "password": "Password123!"
+}
+```
+
+Response:
+
+```json
+{
+  "message": "Registration successful",
+  "data": {
+    "token": "<jwt>",
+    "user": {
+      "id": "user-id",
+      "email": "producer@stembridge.dev",
+      "createdAt": "2026-04-22T10:00:00.000Z",
+      "updatedAt": "2026-04-22T10:00:00.000Z"
+    }
+  }
+}
+```
+
+### Login User
+
+Request:
+
+```http
+POST /auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "producer@stembridge.dev",
+  "password": "Password123!"
+}
+```
+
+Response:
+
+```json
+{
+  "message": "Login successful",
+  "data": {
+    "token": "<jwt>",
+    "user": {
+      "id": "user-id",
+      "email": "producer@stembridge.dev",
+      "createdAt": "2026-04-22T10:00:00.000Z",
+      "updatedAt": "2026-04-22T10:00:00.000Z"
+    }
+  }
+}
+```
+
+### Create Project
+
+Request:
+
+```http
+POST /projects
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Night Session",
+  "bpm": 126,
+  "musicalKey": "F Minor"
+}
+```
+
+Response:
+
+```json
+{
+  "message": "Project created successfully",
+  "data": {
+    "project": {
+      "id": "project-id",
+      "name": "Night Session",
+      "bpm": 126,
+      "musicalKey": "F Minor",
+      "owner": {
+        "id": "user-id",
+        "email": "producer@stembridge.dev"
+      },
+      "collaboratorCount": 1,
+      "versionCount": 0,
+      "collaborators": [
+        {
+          "id": "membership-id",
+          "joinedAt": "2026-04-22T10:01:00.000Z",
+          "user": {
+            "id": "user-id",
+            "email": "producer@stembridge.dev"
+          }
+        }
+      ],
+      "latestVersion": null
+    }
+  }
+}
+```
+
+### Create Song Version
+
+Request:
+
+```http
+POST /projects/:projectId/versions
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "notes": "Second mix pass with tighter drums"
+}
+```
+
+Response:
+
+```json
+{
+  "message": "Version created successfully",
+  "data": {
+    "version": {
+      "id": "version-id",
+      "projectId": "project-id",
+      "versionNumber": 2,
+      "notes": "Second mix pass with tighter drums",
+      "createdBy": {
+        "id": "user-id",
+        "email": "producer@stembridge.dev"
+      },
+      "fileAssets": [],
+      "comments": []
+    }
+  }
+}
+```
+
+### Add Comment
+
+Request:
+
+```http
+POST /versions/:versionId/comments
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "timestampSeconds": 42.5,
+  "text": "The bass transition works well here."
+}
+```
+
+Response:
+
+```json
+{
+  "message": "Comment created successfully",
+  "data": {
+    "comment": {
+      "id": "comment-id",
+      "versionId": "version-id",
+      "timestampSeconds": 42.5,
+      "text": "The bass transition works well here.",
+      "author": {
+        "id": "user-id",
+        "email": "producer@stembridge.dev"
+      }
+    }
+  }
+}
+```
+
+### Upload File Asset
+
+Request:
+
+```http
+POST /versions/:versionId/files/upload
+Authorization: Bearer <jwt>
+Content-Type: multipart/form-data
+```
+
+Form fields:
+
+- `file`: binary file
+- `type`: one of `STEM`, `MIX`, `MIDI`, `SAMPLE`, `OTHER`
+
+Response:
+
+```json
+{
+  "message": "File uploaded successfully",
+  "data": {
+    "file": {
+      "id": "file-id",
+      "versionId": "version-id",
+      "name": "rough-mix.wav",
+      "originalName": "Rough Mix.wav",
+      "type": "MIX",
+      "mimeType": "audio/wav",
+      "sizeBytes": 13104442,
+      "storageKey": "projects/project-id/versions/version-id/1700000000000-Rough-Mix.wav",
+      "url": "https://bucket.s3.region.amazonaws.com/...",
+      "createdAt": "2026-04-22T10:05:00.000Z"
+    }
+  }
+}
 ```
