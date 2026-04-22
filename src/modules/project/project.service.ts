@@ -1,30 +1,12 @@
 import type { Prisma } from "../../generated/prisma/client";
+import {
+  safeUserSelect,
+  serializeSafeUser,
+  type SafeUserRecord
+} from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/app-error";
 import type { CreateProjectInput } from "./project.schemas";
-
-const safeUserSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
-} satisfies Prisma.UserSelect;
-
-type SafeUserRecord = {
-  id: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const toSafeUser = (user: SafeUserRecord) => {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-};
 
 const latestVersionSelect = {
   id: true,
@@ -119,7 +101,7 @@ const toLatestVersion = (
     versionNumber: version.versionNumber,
     notes: version.notes,
     createdAt: version.createdAt,
-    createdBy: toSafeUser(version.createdBy),
+    createdBy: serializeSafeUser(version.createdBy),
     fileAssetCount: version._count.fileAssets,
     commentCount: version._count.comments
   };
@@ -180,7 +162,7 @@ export const getProjectsForUser = async (userId: string) => {
       musicalKey: project.musicalKey,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
-      owner: toSafeUser(project.owner),
+      owner: serializeSafeUser(project.owner),
       collaboratorCount: project._count.members,
       versionCount: project._count.songVersions
     }))
@@ -198,13 +180,13 @@ export const getProjectById = async (projectId: string) => {
       musicalKey: project.musicalKey,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
-      owner: toSafeUser(project.owner),
+      owner: serializeSafeUser(project.owner),
       collaboratorCount: project._count.members,
       versionCount: project._count.songVersions,
       collaborators: project.members.map((member) => ({
         id: member.id,
         joinedAt: member.joinedAt,
-        user: toSafeUser(member.user)
+        user: serializeSafeUser(member.user)
       })),
       latestVersion: toLatestVersion(project.songVersions[0])
     }

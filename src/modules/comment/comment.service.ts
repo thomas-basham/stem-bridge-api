@@ -1,15 +1,12 @@
 import type { Prisma } from "../../generated/prisma/client";
 import { ActivityEventType } from "../../generated/prisma/client";
+import {
+  safeUserSelect,
+  serializeSafeUser,
+  type SafeUserRecord
+} from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
-import { AppError } from "../../utils/app-error";
 import type { CreateCommentInput } from "./comment.schemas";
-
-const safeUserSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
-} satisfies Prisma.UserSelect;
 
 const commentSelect = {
   id: true,
@@ -21,22 +18,6 @@ const commentSelect = {
     select: safeUserSelect
   }
 } satisfies Prisma.CommentSelect;
-
-type SafeUserRecord = {
-  id: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const toSafeUser = (user: SafeUserRecord) => {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-};
 
 const toComment = (comment: {
   id: string;
@@ -52,7 +33,7 @@ const toComment = (comment: {
     timestampSeconds: comment.timestampSeconds.toNumber(),
     text: comment.text,
     createdAt: comment.createdAt,
-    author: toSafeUser(comment.user)
+    author: serializeSafeUser(comment.user)
   };
 };
 
@@ -117,10 +98,6 @@ export const deleteCommentById = async (commentId: string) => {
       id: true
     }
   });
-
-  if (!deletedComment) {
-    throw new AppError(404, "Comment not found.");
-  }
 
   return {
     deleted: true,

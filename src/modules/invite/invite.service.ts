@@ -3,26 +3,17 @@ import crypto from "node:crypto";
 import type { Prisma } from "../../generated/prisma/client";
 import { ActivityEventType, InviteStatus } from "../../generated/prisma/client";
 import { env } from "../../config/env";
+import {
+  safeUserSelect,
+  serializeSafeUser,
+  type SafeUserRecord
+} from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/app-error";
 import type { CreateInviteInput } from "./invite.schemas";
 
 const INVITE_TTL_DAYS = 7;
 const INVITE_TOKEN_BYTES = 32;
-
-const safeUserSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
-} satisfies Prisma.UserSelect;
-
-type SafeUserRecord = {
-  id: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 const pendingInviteSelect = {
   id: true,
@@ -35,15 +26,6 @@ const pendingInviteSelect = {
     select: safeUserSelect
   }
 } satisfies Prisma.InviteSelect;
-
-const toSafeUser = (user: SafeUserRecord) => {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-};
 
 const toInvite = (invite: {
   id: string;
@@ -61,7 +43,7 @@ const toInvite = (invite: {
     status: invite.status,
     createdAt: invite.createdAt,
     expiresAt: invite.expiresAt,
-    invitedBy: toSafeUser(invite.invitedBy)
+    invitedBy: serializeSafeUser(invite.invitedBy)
   };
 };
 

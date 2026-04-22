@@ -1,23 +1,18 @@
 import path from "node:path";
 
 import { ActivityEventType, Prisma } from "../../generated/prisma/client";
+import {
+  safeUserSelect,
+  serializeSafeUser,
+  type SafeUserRecord
+} from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
 import { sanitizeFileName } from "../../lib/storage/s3";
 import { AppError } from "../../utils/app-error";
 import type { CreateVersionInput } from "./version.schemas";
 
-const safeUserSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
-} satisfies Prisma.UserSelect;
-
 const safeCommentAuthorSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
+  ...safeUserSelect
 } satisfies Prisma.UserSelect;
 
 const fileAssetSelect = {
@@ -78,22 +73,6 @@ const versionDetailSelect = {
   }
 } satisfies Prisma.SongVersionSelect;
 
-type SafeUserRecord = {
-  id: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const toSafeUser = (user: SafeUserRecord) => {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-};
-
 const toFileAsset = (fileAsset: {
   id: string;
   name: string;
@@ -130,7 +109,7 @@ const toComment = (comment: {
     timestampSeconds: comment.timestampSeconds.toNumber(),
     text: comment.text,
     createdAt: comment.createdAt,
-    author: toSafeUser(comment.user)
+    author: serializeSafeUser(comment.user)
   };
 };
 
@@ -248,7 +227,7 @@ export const listVersionsForProject = async (projectId: string) => {
       versionNumber: version.versionNumber,
       notes: version.notes,
       createdAt: version.createdAt,
-      createdBy: toSafeUser(version.createdBy),
+      createdBy: serializeSafeUser(version.createdBy),
       fileAssetCount: version._count.fileAssets,
       commentCount: version._count.comments
     }))
@@ -265,7 +244,7 @@ export const getVersionById = async (versionId: string) => {
       versionNumber: version.versionNumber,
       notes: version.notes,
       createdAt: version.createdAt,
-      createdBy: toSafeUser(version.createdBy),
+      createdBy: serializeSafeUser(version.createdBy),
       fileAssets: version.fileAssets.map(toFileAsset),
       comments: version.comments.map(toComment)
     }

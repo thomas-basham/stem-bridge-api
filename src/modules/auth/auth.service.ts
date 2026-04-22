@@ -1,5 +1,10 @@
 import bcrypt from "bcryptjs";
 
+import {
+  safeUserSelect,
+  serializeSafeUser,
+  type SafeUserRecord
+} from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/app-error";
 import { signJwt } from "../../utils/jwt";
@@ -7,31 +12,8 @@ import type { LoginInput, RegisterInput } from "./auth.schemas";
 
 const PASSWORD_SALT_ROUNDS = 12;
 
-const safeUserSelect = {
-  id: true,
-  email: true,
-  createdAt: true,
-  updatedAt: true
-} as const;
-
-type SafeUserRecord = {
-  id: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-const toSafeUser = (user: SafeUserRecord) => {
-  return {
-    id: user.id,
-    email: user.email,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-};
-
 const buildAuthResponse = (user: SafeUserRecord) => {
-  const safeUser = toSafeUser(user);
+  const safeUser = serializeSafeUser(user);
 
   return {
     token: signJwt({
@@ -102,6 +84,6 @@ export const getCurrentUser = async (userId: string) => {
   }
 
   return {
-    user: toSafeUser(user)
+    user: serializeSafeUser(user)
   };
 };

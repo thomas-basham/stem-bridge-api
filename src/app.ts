@@ -4,17 +4,10 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env";
-import { projectActivityRouter } from "./modules/activity/activity.routes";
-import { authRouter } from "./modules/auth/auth.routes";
-import { commentRouter, versionCommentRouter } from "./modules/comment/comment.routes";
-import { versionFileAssetRouter } from "./modules/file-asset/file-asset.routes";
-import { healthRouter } from "./modules/health/health.routes";
-import { inviteRouter, projectInviteRouter } from "./modules/invite/invite.routes";
-import { projectRouter } from "./modules/project/project.routes";
-import { projectVersionRouter, versionRouter } from "./modules/version/version.routes";
 import { AppError } from "./utils/app-error";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
+import { registerAppRoutes } from "./routes";
 import { logger } from "./utils/logger";
 
 const app = express();
@@ -51,17 +44,7 @@ if (env.nodeEnv !== "test") {
   );
 }
 
-app.use("/auth", authRouter);
-app.use("/comments", commentRouter);
-app.use("/health", healthRouter);
-app.use("/invites", inviteRouter);
-app.use("/projects/:projectId/activity", projectActivityRouter);
-app.use("/projects/:projectId/invites", projectInviteRouter);
-app.use("/projects/:projectId/versions", projectVersionRouter);
-app.use("/projects", projectRouter);
-app.use("/versions/:versionId/comments", versionCommentRouter);
-app.use("/versions/:versionId/files", versionFileAssetRouter);
-app.use("/versions", versionRouter);
+registerAppRoutes(app);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
