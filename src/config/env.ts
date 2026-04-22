@@ -3,12 +3,43 @@ import { z } from "zod";
 
 dotenv.config();
 
+const parseCorsOrigins = (value: unknown) => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required."),
   JWT_EXPIRES_IN: z.string().min(1, "JWT_EXPIRES_IN is required."),
+  CORS_ORIGINS: z.preprocess(
+    parseCorsOrigins,
+    z
+      .array(z.string().url())
+      .or(z.array(z.literal("*")))
+      .optional()
+  ),
+  JSON_BODY_LIMIT: z.string().min(1).default("1mb"),
+  URL_ENCODED_BODY_LIMIT: z.string().min(1).default("100kb"),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  UPLOAD_FILE_SIZE_LIMIT_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(100 * 1024 * 1024),
   S3_REGION: z.string().min(1, "S3_REGION is required."),
   S3_BUCKET: z.string().min(1, "S3_BUCKET is required."),
   AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required."),
@@ -29,6 +60,12 @@ export const env = {
   databaseUrl: parsedEnv.data.DATABASE_URL,
   jwtSecret: parsedEnv.data.JWT_SECRET,
   jwtExpiresIn: parsedEnv.data.JWT_EXPIRES_IN,
+  corsOrigins: parsedEnv.data.CORS_ORIGINS ?? [parsedEnv.data.APP_BASE_URL],
+  jsonBodyLimit: parsedEnv.data.JSON_BODY_LIMIT,
+  urlEncodedBodyLimit: parsedEnv.data.URL_ENCODED_BODY_LIMIT,
+  authRateLimitWindowMs: parsedEnv.data.AUTH_RATE_LIMIT_WINDOW_MS,
+  authRateLimitMax: parsedEnv.data.AUTH_RATE_LIMIT_MAX,
+  uploadFileSizeLimitBytes: parsedEnv.data.UPLOAD_FILE_SIZE_LIMIT_BYTES,
   s3Region: parsedEnv.data.S3_REGION,
   s3Bucket: parsedEnv.data.S3_BUCKET,
   awsAccessKeyId: parsedEnv.data.AWS_ACCESS_KEY_ID,

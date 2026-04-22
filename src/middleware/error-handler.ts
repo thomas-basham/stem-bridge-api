@@ -34,10 +34,13 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, next) => {
   }
 
   if (error instanceof multer.MulterError) {
-    res.status(400).json(
+    const statusCode = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+
+    res.status(statusCode).json(
       buildErrorResponse("File upload validation failed.", {
         code: error.code,
-        field: error.field
+        field: error.field,
+        maxFileSizeBytes: env.uploadFileSizeLimitBytes
       })
     );
     return;

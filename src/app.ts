@@ -12,6 +12,7 @@ import { healthRouter } from "./modules/health/health.routes";
 import { inviteRouter, projectInviteRouter } from "./modules/invite/invite.routes";
 import { projectRouter } from "./modules/project/project.routes";
 import { projectVersionRouter, versionRouter } from "./modules/version/version.routes";
+import { AppError } from "./utils/app-error";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
 import { logger } from "./utils/logger";
@@ -24,12 +25,19 @@ app.set("trust proxy", env.nodeEnv === "production" ? 1 : 0);
 app.use(helmet());
 app.use(
   cors({
-    origin: env.appBaseUrl,
+    origin: (origin, callback) => {
+      if (!origin || env.corsOrigins.includes("*") || env.corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new AppError(403, "Origin not allowed by CORS."));
+    },
     credentials: true
   })
 );
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: env.jsonBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: env.urlEncodedBodyLimit }));
 
 if (env.nodeEnv !== "test") {
   app.use(

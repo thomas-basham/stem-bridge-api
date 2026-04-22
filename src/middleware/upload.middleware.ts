@@ -1,9 +1,11 @@
 import multer from "multer";
 
+import { env } from "../config/env";
+
 export const fileUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     files: 1,
-    fileSize: 100 * 1024 * 1024
+    fileSize: env.uploadFileSizeLimitBytes
   }
 });
