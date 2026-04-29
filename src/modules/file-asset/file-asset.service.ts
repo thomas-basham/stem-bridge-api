@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import {
   buildVersionFileStorageKey,
   deleteFileObject,
+  getFileStream,
   getPublicFileUrl,
   sanitizeFileName,
   uploadFileBuffer
@@ -163,4 +164,34 @@ export const listFileAssetsForVersion = async (versionId: string) => {
   return {
     files: fileAssets.map(toFileAsset)
   };
+};
+
+export const downloadVersionFile = async (params: {
+  versionId: string;
+  fileId: string;
+}) => {
+  const fileAsset = await prisma.fileAsset.findFirst({
+    where: {
+      id: params.fileId,
+      songVersionId: params.versionId
+    },
+    select: fileAssetSelect
+  });
+
+  if (!fileAsset) {
+    throw new AppError(404, "File not found.");
+  }
+
+  try {
+    const stream = await getFileStream(fileAsset.storageKey);
+
+    return {
+      file: toFileAsset(fileAsset),
+      stream
+    };
+  } catch (error) {
+    throw new AppError(502, "Failed to retrieve file from storage.", {
+      reason: error instanceof Error ? error.message : "Unknown storage error"
+    });
+  }
 };

@@ -5,6 +5,11 @@ export const versionFileParamsSchema = z.object({
   versionId: z.string().uuid()
 });
 
+export const versionFileAssetParamsSchema = z.object({
+  versionId: z.string().uuid(),
+  fileId: z.string().uuid()
+});
+
 export const uploadFileAssetBodySchema = z.object({
   type: z.nativeEnum(FileAssetType)
 });

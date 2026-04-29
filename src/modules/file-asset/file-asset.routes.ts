@@ -8,6 +8,7 @@ import * as fileAssetController from "./file-asset.controller";
 import {
   createFileAssetMetadataBodySchema,
   uploadFileAssetBodySchema,
+  versionFileAssetParamsSchema,
   versionFileParamsSchema
 } from "./file-asset.schemas";
 
@@ -27,6 +28,11 @@ versionFileAssetRouter.post(
   "/metadata",
   validateBody(createFileAssetMetadataBodySchema),
   fileAssetController.createMetadata
+);
+versionFileAssetRouter.get(
+  "/:fileId/download",
+  validateParams(versionFileAssetParamsSchema),
+  fileAssetController.download
 );
 versionFileAssetRouter.get("/", fileAssetController.list);
 
