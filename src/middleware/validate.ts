@@ -70,7 +70,12 @@ export const validateRequest = (schemas: ValidationSchemas): RequestHandler => {
     }
 
     if (parsedValues.query !== undefined) {
-      req.query = parsedValues.query as typeof req.query;
+      Object.defineProperty(req, "query", {
+        value: parsedValues.query,
+        configurable: true,
+        enumerable: true,
+        writable: true
+      });
     }
 
     next();
