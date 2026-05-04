@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 
 import { env } from "./config/env";
+import { getSeedAssetBuffer, getSeedAssetContentType } from "./lib/storage/s3";
 import { AppError } from "./utils/app-error";
 import { errorHandler } from "./middleware/error-handler";
 import { notFoundHandler } from "./middleware/not-found";
@@ -43,6 +44,21 @@ if (env.nodeEnv !== "test") {
     })
   );
 }
+
+app.get(/^\/seed-assets\/(.+)$/, (req, res, next) => {
+  const storageKey = req.path.replace(/^\//, "");
+  const seedAsset = getSeedAssetBuffer(storageKey);
+
+  if (!seedAsset) {
+    next();
+    return;
+  }
+
+  res.status(200);
+  res.setHeader("Content-Type", getSeedAssetContentType(storageKey));
+  res.setHeader("Content-Length", String(seedAsset.length));
+  res.send(seedAsset);
+});
 
 registerAppRoutes(app);
 app.use(notFoundHandler);

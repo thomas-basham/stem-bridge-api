@@ -1,10 +1,13 @@
 import type { Prisma } from "../../generated/prisma/client";
 import { ActivityEventType } from "../../generated/prisma/client";
+import { env } from "../../config/env";
 import { prisma } from "../../lib/prisma";
 import {
   buildVersionFileStorageKey,
+  buildVersionFileStoragePrefix,
   deleteFileObject,
   getFileStream,
+  getSeedAssetBuffer,
   getPublicFileUrl,
   sanitizeFileName,
   uploadFileBuffer
@@ -48,6 +51,41 @@ const toFileAsset = (fileAsset: {
     storageKey: fileAsset.storageKey,
     url: fileAsset.url,
     createdAt: fileAsset.createdAt
+  };
+};
+
+const normalizeMetadataInput = (
+  versionId: string,
+  projectId: string,
+  input: CreateFileAssetMetadataInput
+): CreateFileAssetMetadataInput => {
+  const storageKey = input.storageKey.trim();
+  const expectedStoragePrefix = buildVersionFileStoragePrefix(projectId, versionId);
+
+  if (!storageKey.startsWith(expectedStoragePrefix)) {
+    throw new AppError(400, "File storage key does not belong to this project version.");
+  }
+
+  const expectedUrl = getPublicFileUrl(storageKey);
+
+  if (input.url.trim() !== expectedUrl) {
+    throw new AppError(400, "File URL does not match the expected storage URL.");
+  }
+
+  if (input.sizeBytes > env.uploadFileSizeLimitBytes) {
+    throw new AppError(413, "File metadata exceeds the configured upload size limit.", {
+      maxFileSizeBytes: env.uploadFileSizeLimitBytes
+    });
+  }
+
+  return {
+    name: sanitizeFileName(input.name),
+    originalName: input.originalName.trim(),
+    type: input.type,
+    mimeType: input.mimeType.trim(),
+    sizeBytes: input.sizeBytes,
+    storageKey,
+    url: expectedUrl
   };
 };
 
@@ -98,7 +136,11 @@ export const createFileAssetMetadata = async (
   projectId: string,
   input: CreateFileAssetMetadataInput
 ) => {
-  return createFileAssetRecord(versionId, projectId, input);
+  return createFileAssetRecord(
+    versionId,
+    projectId,
+    normalizeMetadataInput(versionId, projectId, input)
+  );
 };
 
 export const uploadVersionFile = async (params: {
@@ -183,10 +225,12 @@ export const downloadVersionFile = async (params: {
   }
 
   try {
+    const seedAssetBuffer = getSeedAssetBuffer(fileAsset.storageKey);
     const stream = await getFileStream(fileAsset.storageKey);
 
     return {
       file: toFileAsset(fileAsset),
+      contentLength: seedAssetBuffer?.length,
       stream
     };
   } catch (error) {

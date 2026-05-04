@@ -14,39 +14,61 @@ const parseCorsOrigins = (value: unknown) => {
     .filter((origin) => origin.length > 0);
 };
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
-  DIRECT_DATABASE_URL: z.string().min(1).optional(),
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required."),
-  JWT_EXPIRES_IN: z.string().min(1, "JWT_EXPIRES_IN is required."),
-  CORS_ORIGINS: z.preprocess(
-    parseCorsOrigins,
-    z
-      .array(z.string().url())
-      .or(z.array(z.literal("*")))
-      .optional()
-  ),
-  JSON_BODY_LIMIT: z.string().min(1).default("1mb"),
-  URL_ENCODED_BODY_LIMIT: z.string().min(1).default("100kb"),
-  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(15 * 60 * 1000),
-  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
-  UPLOAD_FILE_SIZE_LIMIT_BYTES: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(100 * 1024 * 1024),
-  S3_REGION: z.string().min(1, "S3_REGION is required."),
-  S3_BUCKET: z.string().min(1, "S3_BUCKET is required."),
-  AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required."),
-  AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required."),
-  APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL.")
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+    DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
+    DIRECT_DATABASE_URL: z.string().min(1).optional(),
+    JWT_SECRET: z.string().min(1, "JWT_SECRET is required."),
+    JWT_EXPIRES_IN: z.string().min(1, "JWT_EXPIRES_IN is required."),
+    CORS_ORIGINS: z.preprocess(
+      parseCorsOrigins,
+      z
+        .array(z.string().url())
+        .or(z.array(z.literal("*")))
+        .optional()
+    ),
+    JSON_BODY_LIMIT: z.string().min(1).default("1mb"),
+    URL_ENCODED_BODY_LIMIT: z.string().min(1).default("100kb"),
+    AUTH_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15 * 60 * 1000),
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    UPLOAD_FILE_SIZE_LIMIT_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(100 * 1024 * 1024),
+    S3_REGION: z.string().min(1, "S3_REGION is required."),
+    S3_BUCKET: z.string().min(1, "S3_BUCKET is required."),
+    AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required."),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required."),
+    APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL.")
+  })
+  .superRefine((config, context) => {
+    if (config.NODE_ENV !== "production") {
+      return;
+    }
+
+    if (config.JWT_SECRET.length < 32) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["JWT_SECRET"],
+        message: "JWT_SECRET must be at least 32 characters in production."
+      });
+    }
+
+    if (config.CORS_ORIGINS?.includes("*")) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["CORS_ORIGINS"],
+        message: "CORS_ORIGINS cannot include * in production."
+      });
+    }
+  });
 
 const parsedEnv = envSchema.safeParse(process.env);
 

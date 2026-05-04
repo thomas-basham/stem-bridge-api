@@ -59,7 +59,7 @@ export const download = asyncHandler(async (req: Request, res: Response) => {
 
   res.status(200);
   res.setHeader("Content-Type", downloadFile.file.mimeType);
-  res.setHeader("Content-Length", String(downloadFile.file.sizeBytes));
+  res.setHeader("Content-Length", String(downloadFile.contentLength ?? downloadFile.file.sizeBytes));
   res.setHeader(
     "Content-Disposition",
     `attachment; filename*=UTF-8''${encodeDownloadFileName(downloadFile.file.originalName)}`
