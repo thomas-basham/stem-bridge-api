@@ -18,6 +18,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
+  DIRECT_DATABASE_URL: z.string().min(1).optional(),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required."),
   JWT_EXPIRES_IN: z.string().min(1, "JWT_EXPIRES_IN is required."),
   CORS_ORIGINS: z.preprocess(
@@ -58,6 +59,7 @@ export const env = {
   nodeEnv: parsedEnv.data.NODE_ENV,
   port: parsedEnv.data.PORT,
   databaseUrl: parsedEnv.data.DATABASE_URL,
+  directDatabaseUrl: parsedEnv.data.DIRECT_DATABASE_URL,
   jwtSecret: parsedEnv.data.JWT_SECRET,
   jwtExpiresIn: parsedEnv.data.JWT_EXPIRES_IN,
   corsOrigins: parsedEnv.data.CORS_ORIGINS ?? [parsedEnv.data.APP_BASE_URL],

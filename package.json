@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio"

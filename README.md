@@ -57,6 +57,7 @@ npm run prisma:generate
 NODE_ENV=development
 PORT=4000
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/stembridge?schema=public"
+DIRECT_DATABASE_URL=
 JWT_SECRET="replace-with-a-long-random-string"
 JWT_EXPIRES_IN=7d
 CORS_ORIGINS=http://localhost:3000
@@ -75,7 +76,8 @@ APP_BASE_URL=http://localhost:4000
 Notes:
 
 - `CORS_ORIGINS` is a comma-separated allowlist.
-- `DATABASE_URL` is used by Prisma and the runtime client.
+- `DATABASE_URL` is the runtime connection string used by the API.
+- `DIRECT_DATABASE_URL` is optional locally, but recommended in production for Prisma migrations when you use a pooled Postgres connection.
 - `UPLOAD_FILE_SIZE_LIMIT_BYTES` controls multer memory upload limits.
 - `APP_BASE_URL` is used when building app-facing URLs.
 
@@ -124,6 +126,49 @@ Run tests:
 ```bash
 npm run test
 ```
+
+## Low-Cost AWS Deployment
+
+The cheapest AWS-friendly path for this repo is:
+
+- API on a small Amazon Lightsail Linux instance
+- PostgreSQL on Supabase
+- file storage on Amazon S3
+
+Deployment files included in this repo:
+
+- [Dockerfile](./Dockerfile)
+- [docker-compose.lightsail.yml](./docker-compose.lightsail.yml)
+- [.env.production.example](./.env.production.example)
+
+Important database note:
+
+- `DATABASE_URL` should be your pooled Supabase runtime connection string
+- `DIRECT_DATABASE_URL` should be the direct Supabase connection string for Prisma migrations
+
+Deploy steps:
+
+1. Create a small Lightsail instance.
+2. Install Docker and the Docker Compose plugin.
+3. Copy this repo to the instance.
+4. Create `.env.production` from `.env.production.example`.
+5. Set `APP_BASE_URL` to the public IP or domain for the API.
+6. Open port `80` in the Lightsail networking tab.
+7. Start the API:
+
+```bash
+docker compose -f docker-compose.lightsail.yml up --build -d
+```
+
+The container runs `prisma migrate deploy` before starting the server.
+
+Health check:
+
+```bash
+curl http://127.0.0.1/health
+```
+
+For a full step-by-step guide, see [docs/lightsail-deploy.md](./docs/lightsail-deploy.md).
 
 ## API Conventions
 
