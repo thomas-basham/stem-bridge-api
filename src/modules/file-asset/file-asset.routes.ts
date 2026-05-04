@@ -6,6 +6,7 @@ import { ensureVersionMember } from "../../middleware/version-access.middleware"
 import { validateBody, validateParams } from "../../middleware/validate";
 import * as fileAssetController from "./file-asset.controller";
 import {
+  createFileAssetUploadUrlBodySchema,
   createFileAssetMetadataBodySchema,
   uploadFileAssetBodySchema,
   versionFileAssetParamsSchema,
@@ -19,6 +20,11 @@ versionFileAssetRouter.use(validateParams(versionFileParamsSchema));
 versionFileAssetRouter.use(ensureVersionMember);
 
 versionFileAssetRouter.post(
+  "/upload-url",
+  validateBody(createFileAssetUploadUrlBodySchema),
+  fileAssetController.createUploadUrl
+);
+versionFileAssetRouter.post(
   "/upload",
   fileUpload.single("file"),
   validateBody(uploadFileAssetBodySchema),
@@ -28,6 +34,11 @@ versionFileAssetRouter.post(
   "/metadata",
   validateBody(createFileAssetMetadataBodySchema),
   fileAssetController.createMetadata
+);
+versionFileAssetRouter.get(
+  "/:fileId/download-url",
+  validateParams(versionFileAssetParamsSchema),
+  fileAssetController.createDownloadUrl
 );
 versionFileAssetRouter.get(
   "/:fileId/download",

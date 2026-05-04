@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: StemBridge API on AWS Lambda and API Gateway HTTP API.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - development
+      - test
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+  DirectDatabaseUrl:
+    Type: String
+    NoEcho: true
+    Default: ""
+  JwtSecret:
+    Type: String
+    NoEcho: true
+  JwtExpiresIn:
+    Type: String
+    Default: 7d
+  CorsOrigins:
+    Type: String
+    Description: Comma-separated frontend origins allowed by Express CORS.
+  JsonBodyLimit:
+    Type: String
+    Default: 1mb
+  UrlEncodedBodyLimit:
+    Type: String
+    Default: 100kb
+  AuthRateLimitWindowMs:
+    Type: String
+    Default: 900000
+  AuthRateLimitMax:
+    Type: String
+    Default: 10
+  UploadFileSizeLimitBytes:
+    Type: String
+    Default: 104857600
+  S3Region:
+    Type: String
+  S3Bucket:
+    Type: String
+  AppBaseUrl:
+    Type: String
+    Description: Public API base URL. Update after first deploy if using the generated API Gateway URL.
+
+Globals:
+  Function:
+    Runtime: nodejs24.x
+    Architectures:
+      - arm64
+    MemorySize: 1024
+    Timeout: 30
+    Tracing: Active
+    Environment:
+      Variables:
+        NODE_ENV: !Ref Environment
+        DATABASE_URL: !Ref DatabaseUrl
+        DIRECT_DATABASE_URL: !Ref DirectDatabaseUrl
+        JWT_SECRET: !Ref JwtSecret
+        JWT_EXPIRES_IN: !Ref JwtExpiresIn
+        CORS_ORIGINS: !Ref CorsOrigins
+        JSON_BODY_LIMIT: !Ref JsonBodyLimit
+        URL_ENCODED_BODY_LIMIT: !Ref UrlEncodedBodyLimit
+        AUTH_RATE_LIMIT_WINDOW_MS: !Ref AuthRateLimitWindowMs
+        AUTH_RATE_LIMIT_MAX: !Ref AuthRateLimitMax
+        UPLOAD_FILE_SIZE_LIMIT_BYTES: !Ref UploadFileSizeLimitBytes
+        S3_REGION: !Ref S3Region
+        S3_BUCKET: !Ref S3Bucket
+        APP_BASE_URL: !Ref AppBaseUrl
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .lambda-package
+      Handler: dist/lambda.handler
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${S3Bucket}/*
+      Events:
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway HTTP API URL.
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
+  ApiFunctionName:
+    Description: Lambda function name.
+    Value: !Ref ApiFunction

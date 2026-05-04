@@ -6,14 +6,25 @@ import {
   buildVersionFileStorageKey,
   buildVersionFileStoragePrefix,
   deleteFileObject,
+  encodeObjectKeyForUrl,
   getFileStream,
   getSeedAssetBuffer,
+  getSeedAssetSizeBytes,
   getPublicFileUrl,
+  getSignedFileUrl,
+  getSignedUploadUrl,
+  isSeedAssetStorageKey,
   sanitizeFileName,
   uploadFileBuffer
 } from "../../lib/storage/s3";
 import { AppError } from "../../utils/app-error";
-import type { CreateFileAssetMetadataInput, UploadFileAssetInput } from "./file-asset.schemas";
+import type {
+  CreateFileAssetMetadataInput,
+  CreateFileAssetUploadUrlInput,
+  UploadFileAssetInput
+} from "./file-asset.schemas";
+
+const PRESIGNED_URL_EXPIRES_IN_SECONDS = 900;
 
 const fileAssetSelect = {
   id: true,
@@ -47,7 +58,7 @@ const toFileAsset = (fileAsset: {
     originalName: fileAsset.originalName,
     type: fileAsset.type,
     mimeType: fileAsset.mimeType,
-    sizeBytes: fileAsset.sizeBytes,
+    sizeBytes: getSeedAssetSizeBytes(fileAsset.storageKey) ?? fileAsset.sizeBytes,
     storageKey: fileAsset.storageKey,
     url: fileAsset.url,
     createdAt: fileAsset.createdAt
@@ -143,6 +154,56 @@ export const createFileAssetMetadata = async (
   );
 };
 
+export const createFileAssetUploadUrl = async (params: {
+  versionId: string;
+  projectId: string;
+  input: CreateFileAssetUploadUrlInput;
+}) => {
+  if (params.input.sizeBytes > env.uploadFileSizeLimitBytes) {
+    throw new AppError(413, "File exceeds the configured upload size limit.", {
+      maxFileSizeBytes: env.uploadFileSizeLimitBytes
+    });
+  }
+
+  const originalName = params.input.originalName.trim();
+  const mimeType = params.input.mimeType.trim();
+  const storageKey = buildVersionFileStorageKey(params.projectId, params.versionId, originalName);
+  const safeName = sanitizeFileName(originalName);
+  const fileUrl = getPublicFileUrl(storageKey);
+
+  try {
+    const signedUploadUrl = await getSignedUploadUrl({
+      storageKey,
+      contentType: mimeType,
+      expiresInSeconds: PRESIGNED_URL_EXPIRES_IN_SECONDS
+    });
+
+    return {
+      upload: {
+        url: signedUploadUrl,
+        method: "PUT" as const,
+        headers: {
+          "Content-Type": mimeType
+        },
+        expiresInSeconds: PRESIGNED_URL_EXPIRES_IN_SECONDS
+      },
+      metadata: {
+        name: safeName,
+        originalName,
+        type: params.input.type,
+        mimeType,
+        sizeBytes: params.input.sizeBytes,
+        storageKey,
+        url: fileUrl
+      }
+    };
+  } catch (error) {
+    throw new AppError(502, "Failed to create upload URL.", {
+      reason: error instanceof Error ? error.message : "Unknown storage error"
+    });
+  }
+};
+
 export const uploadVersionFile = async (params: {
   versionId: string;
   projectId: string;
@@ -208,10 +269,7 @@ export const listFileAssetsForVersion = async (versionId: string) => {
   };
 };
 
-export const downloadVersionFile = async (params: {
-  versionId: string;
-  fileId: string;
-}) => {
+const findFileAssetForVersion = async (params: { versionId: string; fileId: string }) => {
   const fileAsset = await prisma.fileAsset.findFirst({
     where: {
       id: params.fileId,
@@ -223,6 +281,47 @@ export const downloadVersionFile = async (params: {
   if (!fileAsset) {
     throw new AppError(404, "File not found.");
   }
+
+  return fileAsset;
+};
+
+const getSeedAssetUrl = (storageKey: string) => {
+  return `${env.appBaseUrl.replace(/\/$/, "")}/${encodeObjectKeyForUrl(storageKey)}`;
+};
+
+export const getVersionFileDownloadUrl = async (params: {
+  versionId: string;
+  fileId: string;
+}) => {
+  const fileAsset = await findFileAssetForVersion(params);
+
+  try {
+    const downloadUrl = isSeedAssetStorageKey(fileAsset.storageKey)
+      ? getSeedAssetUrl(fileAsset.storageKey)
+      : await getSignedFileUrl(fileAsset.storageKey, PRESIGNED_URL_EXPIRES_IN_SECONDS);
+
+    return {
+      file: toFileAsset(fileAsset),
+      download: {
+        url: downloadUrl,
+        method: "GET" as const,
+        expiresInSeconds: isSeedAssetStorageKey(fileAsset.storageKey)
+          ? null
+          : PRESIGNED_URL_EXPIRES_IN_SECONDS
+      }
+    };
+  } catch (error) {
+    throw new AppError(502, "Failed to create download URL.", {
+      reason: error instanceof Error ? error.message : "Unknown storage error"
+    });
+  }
+};
+
+export const downloadVersionFile = async (params: {
+  versionId: string;
+  fileId: string;
+}) => {
+  const fileAsset = await findFileAssetForVersion(params);
 
   try {
     const seedAssetBuffer = getSeedAssetBuffer(fileAsset.storageKey);

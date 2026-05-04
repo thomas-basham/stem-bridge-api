@@ -4,11 +4,14 @@ import { asyncHandler } from "../../utils/async-handler";
 import { AppError } from "../../utils/app-error";
 import { sendSuccess } from "../../utils/response";
 import {
+  createFileAssetUploadUrl,
   createFileAssetMetadata,
   downloadVersionFile,
+  getVersionFileDownloadUrl,
   listFileAssetsForVersion,
   uploadVersionFile
 } from "./file-asset.service";
+import { isSeedAssetStorageKey } from "../../lib/storage/s3";
 
 export const createMetadata = asyncHandler(async (req: Request, res: Response) => {
   const result = await createFileAssetMetadata(
@@ -22,6 +25,16 @@ export const createMetadata = asyncHandler(async (req: Request, res: Response) =
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const result = await listFileAssetsForVersion(req.versionAccess!.versionId);
   sendSuccess(res, 200, "Files retrieved successfully", result);
+});
+
+export const createUploadUrl = asyncHandler(async (req: Request, res: Response) => {
+  const result = await createFileAssetUploadUrl({
+    versionId: req.versionAccess!.versionId,
+    projectId: req.versionAccess!.projectId,
+    input: req.body
+  });
+
+  sendSuccess(res, 201, "File upload URL created successfully", result);
 });
 
 export const upload = asyncHandler(async (req: Request, res: Response) => {
@@ -52,6 +65,16 @@ export const download = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError(400, "File id route parameter is required.");
   }
 
+  const signedDownload = await getVersionFileDownloadUrl({
+    versionId: req.versionAccess!.versionId,
+    fileId
+  });
+
+  if (!isSeedAssetStorageKey(signedDownload.file.storageKey)) {
+    res.redirect(302, signedDownload.download.url);
+    return;
+  }
+
   const downloadFile = await downloadVersionFile({
     versionId: req.versionAccess!.versionId,
     fileId
@@ -70,4 +93,19 @@ export const download = asyncHandler(async (req: Request, res: Response) => {
   });
 
   downloadFile.stream.pipe(res);
+});
+
+export const createDownloadUrl = asyncHandler(async (req: Request, res: Response) => {
+  const fileId = req.params.fileId;
+
+  if (typeof fileId !== "string") {
+    throw new AppError(400, "File id route parameter is required.");
+  }
+
+  const result = await getVersionFileDownloadUrl({
+    versionId: req.versionAccess!.versionId,
+    fileId
+  });
+
+  sendSuccess(res, 200, "File download URL created successfully", result);
 });

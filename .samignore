@@ -1,0 +1,11 @@
+.aws-sam
+.git
+.env
+.env.*
+coverage
+docs
+node_modules
+tests
+*.log
+.eslintcache
+.DS_Store

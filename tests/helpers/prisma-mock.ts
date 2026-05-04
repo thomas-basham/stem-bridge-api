@@ -572,6 +572,103 @@ const commentCreate = vi.fn(
   }
 );
 
+const selectFileAsset = (fileAsset: FileAssetRecord, select?: Record<string, boolean>) => {
+  if (!select) {
+    return fileAsset;
+  }
+
+  return {
+    ...(select.id ? { id: fileAsset.id } : {}),
+    ...(select.songVersionId ? { songVersionId: fileAsset.songVersionId } : {}),
+    ...(select.name ? { name: fileAsset.name } : {}),
+    ...(select.originalName ? { originalName: fileAsset.originalName } : {}),
+    ...(select.type ? { type: fileAsset.type } : {}),
+    ...(select.mimeType ? { mimeType: fileAsset.mimeType } : {}),
+    ...(select.sizeBytes ? { sizeBytes: fileAsset.sizeBytes } : {}),
+    ...(select.storageKey ? { storageKey: fileAsset.storageKey } : {}),
+    ...(select.url ? { url: fileAsset.url } : {}),
+    ...(select.createdAt ? { createdAt: fileAsset.createdAt } : {})
+  };
+};
+
+const fileAssetCreate = vi.fn(
+  async ({
+    data,
+    select
+  }: {
+    data: {
+      songVersionId: string;
+      name: string;
+      originalName: string;
+      type: string;
+      mimeType: string;
+      sizeBytes: number;
+      storageKey: string;
+      url: string;
+    };
+    select?: Record<string, boolean>;
+  }) => {
+    const fileAsset: FileAssetRecord = {
+      id: randomUUID(),
+      songVersionId: data.songVersionId,
+      name: data.name,
+      originalName: data.originalName,
+      type: data.type,
+      mimeType: data.mimeType,
+      sizeBytes: data.sizeBytes,
+      storageKey: data.storageKey,
+      url: data.url,
+      createdAt: now()
+    };
+
+    state.fileAssets.push(fileAsset);
+
+    return selectFileAsset(fileAsset, select);
+  }
+);
+
+const fileAssetFindFirst = vi.fn(
+  async ({
+    where,
+    select
+  }: {
+    where: {
+      id?: string;
+      songVersionId?: string;
+    };
+    select?: Record<string, boolean>;
+  }) => {
+    const fileAsset = state.fileAssets.find((record) => {
+      return (
+        (where.id === undefined || record.id === where.id) &&
+        (where.songVersionId === undefined || record.songVersionId === where.songVersionId)
+      );
+    });
+
+    return fileAsset ? selectFileAsset(fileAsset, select) : null;
+  }
+);
+
+const fileAssetFindMany = vi.fn(
+  async ({
+    where,
+    select
+  }: {
+    where: {
+      songVersionId?: string;
+    };
+    select?: Record<string, boolean>;
+  }) => {
+    return sortByDateAscending(
+      state.fileAssets.filter((record) => {
+        return where.songVersionId === undefined || record.songVersionId === where.songVersionId;
+      })
+    )
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((fileAsset) => selectFileAsset(fileAsset, select));
+  }
+);
+
 const activityEventCreate = vi.fn(
   async ({
     data
@@ -618,6 +715,11 @@ type PrismaMock = {
   comment: {
     create: typeof commentCreate;
   };
+  fileAsset: {
+    create: typeof fileAssetCreate;
+    findFirst: typeof fileAssetFindFirst;
+    findMany: typeof fileAssetFindMany;
+  };
   activityEvent: {
     create: typeof activityEventCreate;
   };
@@ -649,6 +751,12 @@ prismaMock.songVersion = {
 
 prismaMock.comment = {
   create: commentCreate
+};
+
+prismaMock.fileAsset = {
+  create: fileAssetCreate,
+  findFirst: fileAssetFindFirst,
+  findMany: fileAssetFindMany
 };
 
 prismaMock.activityEvent = {
@@ -744,4 +852,34 @@ export const seedSongVersion = (input: {
   state.songVersions.push(version);
 
   return version;
+};
+
+export const seedFileAsset = (input: {
+  songVersionId: string;
+  name?: string;
+  originalName?: string;
+  type?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  storageKey?: string;
+  url?: string;
+}) => {
+  const storageKey =
+    input.storageKey ?? `projects/test-project/versions/${input.songVersionId}/test-file.wav`;
+  const fileAsset: FileAssetRecord = {
+    id: randomUUID(),
+    songVersionId: input.songVersionId,
+    name: input.name ?? "test-file.wav",
+    originalName: input.originalName ?? "test-file.wav",
+    type: input.type ?? "STEM",
+    mimeType: input.mimeType ?? "audio/wav",
+    sizeBytes: input.sizeBytes ?? 1024,
+    storageKey,
+    url: input.url ?? `https://stembridge-test.s3.us-west-2.amazonaws.com/${storageKey}`,
+    createdAt: now()
+  };
+
+  state.fileAssets.push(fileAsset);
+
+  return fileAsset;
 };

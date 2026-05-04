@@ -7,7 +7,7 @@ import {
   type SafeUserRecord
 } from "../../lib/serializers/safe-user";
 import { prisma } from "../../lib/prisma";
-import { sanitizeFileName } from "../../lib/storage/s3";
+import { getSeedAssetSizeBytes, sanitizeFileName } from "../../lib/storage/s3";
 import { AppError } from "../../utils/app-error";
 import type { CreateVersionInput } from "./version.schemas";
 
@@ -90,7 +90,7 @@ const toFileAsset = (fileAsset: {
     originalName: fileAsset.originalName,
     type: fileAsset.type,
     mimeType: fileAsset.mimeType,
-    sizeBytes: fileAsset.sizeBytes,
+    sizeBytes: getSeedAssetSizeBytes(fileAsset.storageKey) ?? fileAsset.sizeBytes,
     storageKey: fileAsset.storageKey,
     url: fileAsset.url,
     createdAt: fileAsset.createdAt

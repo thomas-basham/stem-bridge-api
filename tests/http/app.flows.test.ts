@@ -3,7 +3,8 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import { app } from "../../src/app";
-import { seedProject, seedSongVersion, seedUser } from "../helpers/prisma-mock";
+import { getSeedAssetSizeBytes } from "../../src/lib/storage/s3";
+import { seedFileAsset, seedProject, seedSongVersion, seedUser } from "../helpers/prisma-mock";
 
 const loginAndGetToken = async (email: string, password: string) => {
   const loginResponse = await request(app).post("/auth/login").send({
@@ -190,5 +191,206 @@ describe("critical backend flows", () => {
       id: seededUser.id,
       email: seededUser.email
     });
+  });
+
+  it("creates a presigned upload URL for a version file", async () => {
+    const seededUser = await seedUser({
+      email: "upload-url-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+
+    const token = await loginAndGetToken(seededUser.email, seededUser.password);
+    const response = await request(app)
+      .post(`/versions/${version.id}/files/upload-url`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        originalName: "lead vocal.wav",
+        type: "STEM",
+        mimeType: "audio/wav",
+        sizeBytes: 2048
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.message).toBe("File upload URL created successfully");
+    expect(response.body.data.upload).toMatchObject({
+      method: "PUT",
+      headers: {
+        "Content-Type": "audio/wav"
+      },
+      expiresInSeconds: 900
+    });
+    expect(response.body.data.upload.url).toEqual(expect.stringContaining("X-Amz-Signature"));
+    expect(response.body.data.metadata).toMatchObject({
+      name: "lead-vocal.wav",
+      originalName: "lead vocal.wav",
+      type: "STEM",
+      mimeType: "audio/wav",
+      sizeBytes: 2048
+    });
+    expect(response.body.data.metadata.storageKey).toEqual(
+      expect.stringContaining(`projects/${project.id}/versions/${version.id}/`)
+    );
+  });
+
+  it("rejects presigned upload URL requests over the configured file size limit", async () => {
+    const seededUser = await seedUser({
+      email: "oversized-upload-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+
+    const token = await loginAndGetToken(seededUser.email, seededUser.password);
+    const response = await request(app)
+      .post(`/versions/${version.id}/files/upload-url`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        originalName: "huge-mix.wav",
+        type: "MIX",
+        mimeType: "audio/wav",
+        sizeBytes: Number(process.env.UPLOAD_FILE_SIZE_LIMIT_BYTES) + 1
+      });
+
+    expect(response.status).toBe(413);
+    expect(response.body.message).toBe("File exceeds the configured upload size limit.");
+  });
+
+  it("rejects file metadata whose storage key is outside the version prefix", async () => {
+    const seededUser = await seedUser({
+      email: "metadata-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+
+    const token = await loginAndGetToken(seededUser.email, seededUser.password);
+    const response = await request(app)
+      .post(`/versions/${version.id}/files/metadata`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "stolen.wav",
+        originalName: "stolen.wav",
+        type: "STEM",
+        mimeType: "audio/wav",
+        sizeBytes: 1024,
+        storageKey: "projects/other-project/versions/other-version/stolen.wav",
+        url: "https://stembridge-test.s3.us-west-2.amazonaws.com/projects/other-project/versions/other-version/stolen.wav"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe(
+      "File storage key does not belong to this project version."
+    );
+  });
+
+  it("returns a presigned download URL for an existing file", async () => {
+    const seededUser = await seedUser({
+      email: "download-url-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+    const fileAsset = seedFileAsset({
+      songVersionId: version.id,
+      storageKey: `projects/${project.id}/versions/${version.id}/mix.wav`
+    });
+
+    const token = await loginAndGetToken(seededUser.email, seededUser.password);
+    const response = await request(app)
+      .get(`/versions/${version.id}/files/${fileAsset.id}/download-url`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe("File download URL created successfully");
+    expect(response.body.data.file).toMatchObject({
+      id: fileAsset.id,
+      versionId: version.id,
+      storageKey: fileAsset.storageKey
+    });
+    expect(response.body.data.download).toMatchObject({
+      method: "GET",
+      expiresInSeconds: 900
+    });
+    expect(response.body.data.download.url).toEqual(expect.stringContaining("X-Amz-Signature"));
+  });
+
+  it("reports the generated byte size for seed assets", async () => {
+    const seededUser = await seedUser({
+      email: "seed-asset-size-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+    const storageKey = `seed-assets/${project.id}/${version.id}/neon-skyline-mix-v3.wav`;
+    const fileAsset = seedFileAsset({
+      songVersionId: version.id,
+      originalName: "Neon Skyline Mix v3.wav",
+      sizeBytes: 14_998_044,
+      storageKey
+    });
+
+    const token = await loginAndGetToken(seededUser.email, seededUser.password);
+    const response = await request(app)
+      .get(`/versions/${version.id}/files`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.files).toContainEqual(
+      expect.objectContaining({
+        id: fileAsset.id,
+        sizeBytes: getSeedAssetSizeBytes(storageKey)
+      })
+    );
+  });
+
+  it("requires authentication before creating file access URLs", async () => {
+    const seededUser = await seedUser({
+      email: "unauthorized-file-user@stembridge.dev"
+    });
+    const project = seedProject({
+      ownerId: seededUser.id,
+      memberUserIds: [seededUser.id]
+    });
+    const version = seedSongVersion({
+      projectId: project.id,
+      createdById: seededUser.id
+    });
+
+    const response = await request(app).post(`/versions/${version.id}/files/upload-url`).send({
+      originalName: "lead.wav",
+      type: "STEM",
+      mimeType: "audio/wav",
+      sizeBytes: 1024
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe("Missing Authorization header.");
   });
 });

@@ -14,6 +14,13 @@ export const uploadFileAssetBodySchema = z.object({
   type: z.nativeEnum(FileAssetType)
 });
 
+export const createFileAssetUploadUrlBodySchema = z.object({
+  originalName: z.string().trim().min(1).max(255),
+  type: z.nativeEnum(FileAssetType),
+  mimeType: z.string().trim().min(1).max(255),
+  sizeBytes: z.coerce.number().int().positive().max(2_000_000_000)
+});
+
 export const createFileAssetMetadataBodySchema = z.object({
   name: z.string().trim().min(1).max(255),
   originalName: z.string().trim().min(1).max(255),
@@ -25,4 +32,7 @@ export const createFileAssetMetadataBodySchema = z.object({
 });
 
 export type UploadFileAssetInput = z.infer<typeof uploadFileAssetBodySchema>;
+export type CreateFileAssetUploadUrlInput = z.infer<
+  typeof createFileAssetUploadUrlBodySchema
+>;
 export type CreateFileAssetMetadataInput = z.infer<typeof createFileAssetMetadataBodySchema>;

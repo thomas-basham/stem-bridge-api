@@ -14,12 +14,20 @@ const parseCorsOrigins = (value: unknown) => {
     .filter((origin) => origin.length > 0);
 };
 
+const emptyStringToUndefined = (value: unknown) => {
+  if (typeof value === "string" && value.trim().length === 0) {
+    return undefined;
+  }
+
+  return value;
+};
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
-    DIRECT_DATABASE_URL: z.string().min(1).optional(),
+    DIRECT_DATABASE_URL: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
     JWT_SECRET: z.string().min(1, "JWT_SECRET is required."),
     JWT_EXPIRES_IN: z.string().min(1, "JWT_EXPIRES_IN is required."),
     CORS_ORIGINS: z.preprocess(
@@ -44,11 +52,23 @@ const envSchema = z
       .default(100 * 1024 * 1024),
     S3_REGION: z.string().min(1, "S3_REGION is required."),
     S3_BUCKET: z.string().min(1, "S3_BUCKET is required."),
-    AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required."),
-    AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required."),
+    AWS_ACCESS_KEY_ID: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
+    AWS_SECRET_ACCESS_KEY: z.preprocess(emptyStringToUndefined, z.string().min(1).optional()),
     APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL.")
   })
   .superRefine((config, context) => {
+    if (
+      (config.AWS_ACCESS_KEY_ID && !config.AWS_SECRET_ACCESS_KEY) ||
+      (!config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["AWS_ACCESS_KEY_ID"],
+        message:
+          "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must either both be set or both be omitted."
+      });
+    }
+
     if (config.NODE_ENV !== "production") {
       return;
     }
@@ -68,6 +88,7 @@ const envSchema = z
         message: "CORS_ORIGINS cannot include * in production."
       });
     }
+
   });
 
 const parsedEnv = envSchema.safeParse(process.env);

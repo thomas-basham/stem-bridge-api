@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "stem-bridge-api"
+resolve_s3 = true
+s3_prefix = "stem-bridge-api"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"production\" JwtExpiresIn=\"7d\" CorsOrigins=\"http://localhost:3000,http://localhost:5173\" JsonBodyLimit=\"1mb\" UrlEncodedBodyLimit=\"100kb\" AuthRateLimitWindowMs=\"900000\" AuthRateLimitMax=\"10\" UploadFileSizeLimitBytes=\"104857600\" S3Region=\"us-west-2\" S3Bucket=\"stembridge-dev\" AppBaseUrl=\"https://jckaua7i8l.execute-api.us-west-2.amazonaws.com\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-west-2"

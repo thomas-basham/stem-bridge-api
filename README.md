@@ -68,6 +68,7 @@ AUTH_RATE_LIMIT_MAX=10
 UPLOAD_FILE_SIZE_LIMIT_BYTES=104857600
 S3_REGION=us-east-1
 S3_BUCKET=stembridge-dev
+# Optional locally. In Lambda, prefer the execution role instead of static keys.
 AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-access-key
 APP_BASE_URL=http://localhost:4000
@@ -78,8 +79,9 @@ Notes:
 - `CORS_ORIGINS` is a comma-separated allowlist.
 - `DATABASE_URL` is the runtime connection string used by the API.
 - `DIRECT_DATABASE_URL` is optional locally, but recommended in production for Prisma migrations when you use a pooled Postgres connection.
-- `UPLOAD_FILE_SIZE_LIMIT_BYTES` controls multer memory upload limits.
+- `UPLOAD_FILE_SIZE_LIMIT_BYTES` controls both legacy multipart uploads and presigned upload URL requests.
 - `APP_BASE_URL` is used when building app-facing URLs.
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are optional. If omitted, the AWS SDK uses the default credential provider chain, including the Lambda execution role.
 
 ## Database
 
@@ -127,48 +129,72 @@ Run tests:
 npm run test
 ```
 
-## Low-Cost AWS Deployment
+## AWS Lambda Deployment
 
-The cheapest AWS-friendly path for this repo is:
+The primary AWS deployment path for this repo is:
 
-- API on a small Amazon Lightsail Linux instance
-- PostgreSQL on Supabase
-- file storage on Amazon S3
+- API on AWS Lambda behind API Gateway HTTP API
+- PostgreSQL on Supabase or another pooled Postgres provider
+- file storage on Amazon S3 with browser direct uploads/downloads
 
 Deployment files included in this repo:
 
-- [Dockerfile](./Dockerfile)
-- [docker-compose.lightsail.yml](./docker-compose.lightsail.yml)
-- [.env.production.example](./.env.production.example)
+- [template.yaml](./template.yaml)
 
 Important database note:
 
 - `DATABASE_URL` should be your pooled Supabase runtime connection string
 - `DIRECT_DATABASE_URL` should be the direct Supabase connection string for Prisma migrations
+- Run Prisma migrations separately from Lambda request handling.
 
 Deploy steps:
 
-1. Create a small Lightsail instance.
-2. Install Docker and the Docker Compose plugin.
-3. Copy this repo to the instance.
-4. Create `.env.production` from `.env.production.example`.
-5. Set `APP_BASE_URL` to the public IP or domain for the API.
-6. Open port `80` in the Lightsail networking tab.
-7. Start the API:
+1. Install the AWS SAM CLI.
+2. Create an S3 bucket for file assets.
+3. Configure the bucket CORS policy for your frontend origin:
 
-```bash
-docker compose -f docker-compose.lightsail.yml up --build -d
+```json
+[
+  {
+    "AllowedOrigins": ["https://your-frontend.example.com"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
 ```
 
-The container runs `prisma migrate deploy` before starting the server.
+4. Build and validate the API:
+
+```bash
+npm run lambda:package
+npm run sam:validate
+```
+
+5. Run migrations from your machine or CI with `DIRECT_DATABASE_URL` set:
+
+```bash
+npm run prisma:migrate:deploy
+```
+
+6. Deploy with guided parameters:
+
+```bash
+npm run sam:deploy
+```
+
+If you run `sam deploy` directly instead of `npm run sam:deploy`, run `npm run lambda:package` first. The SAM template deploys `.lambda-package` so Lambda does not receive the full local workspace or development `node_modules`.
 
 Health check:
 
 ```bash
-curl http://127.0.0.1/health
+curl https://your-api-id.execute-api.region.amazonaws.com/health
 ```
 
-For a full step-by-step guide, see [docs/lightsail-deploy.md](./docs/lightsail-deploy.md).
+The S3 bucket does not need public-read access. Stored file `url` values are canonical object URLs; authenticated access uses short-lived presigned URLs.
+
+The Docker/Lightsail files are still available as an alternate long-running server deployment path. For that path, see [docs/lightsail-deploy.md](./docs/lightsail-deploy.md).
 
 ## API Conventions
 
@@ -229,8 +255,11 @@ Authorization: Bearer <jwt>
 
 ### File Assets
 
+- `POST /versions/:versionId/files/upload-url`
 - `POST /versions/:versionId/files/upload`
 - `POST /versions/:versionId/files/metadata`
+- `GET /versions/:versionId/files/:fileId/download-url`
+- `GET /versions/:versionId/files/:fileId/download`
 - `GET /versions/:versionId/files`
 
 ### Comments
@@ -437,26 +466,86 @@ Response:
 }
 ```
 
-### Upload File Asset
+### Create Presigned Upload URL
 
 Request:
 
 ```http
-POST /versions/:versionId/files/upload
+POST /versions/:versionId/files/upload-url
 Authorization: Bearer <jwt>
-Content-Type: multipart/form-data
+Content-Type: application/json
 ```
 
-Form fields:
+Body:
 
-- `file`: binary file
-- `type`: one of `STEM`, `MIX`, `MIDI`, `SAMPLE`, `OTHER`
+```json
+{
+  "originalName": "Rough Mix.wav",
+  "type": "MIX",
+  "mimeType": "audio/wav",
+  "sizeBytes": 13104442
+}
+```
 
 Response:
 
 ```json
 {
-  "message": "File uploaded successfully",
+  "message": "File upload URL created successfully",
+  "data": {
+    "upload": {
+      "url": "https://bucket.s3.region.amazonaws.com/...?X-Amz-Signature=...",
+      "method": "PUT",
+      "headers": {
+        "Content-Type": "audio/wav"
+      },
+      "expiresInSeconds": 900
+    },
+    "metadata": {
+      "name": "rough-mix.wav",
+      "originalName": "Rough Mix.wav",
+      "type": "MIX",
+      "mimeType": "audio/wav",
+      "sizeBytes": 13104442,
+      "storageKey": "projects/project-id/versions/version-id/1700000000000-Rough-Mix.wav",
+      "url": "https://bucket.s3.region.amazonaws.com/..."
+    }
+  }
+}
+```
+
+Frontend flow:
+
+1. Request `/upload-url`.
+2. `PUT` the raw file to `data.upload.url` using the returned headers.
+3. After S3 returns success, send `data.metadata` to `/versions/:versionId/files/metadata`.
+
+### Create File Metadata
+
+Request:
+
+```http
+POST /versions/:versionId/files/metadata
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+Use the `metadata` object returned by `/upload-url` after the direct S3 upload succeeds.
+
+### Download File Asset
+
+Request:
+
+```http
+GET /versions/:versionId/files/:fileId/download-url
+Authorization: Bearer <jwt>
+```
+
+Response:
+
+```json
+{
+  "message": "File download URL created successfully",
   "data": {
     "file": {
       "id": "file-id",
@@ -469,7 +558,14 @@ Response:
       "storageKey": "projects/project-id/versions/version-id/1700000000000-Rough-Mix.wav",
       "url": "https://bucket.s3.region.amazonaws.com/...",
       "createdAt": "2026-04-22T10:05:00.000Z"
+    },
+    "download": {
+      "url": "https://bucket.s3.region.amazonaws.com/...?X-Amz-Signature=...",
+      "method": "GET",
+      "expiresInSeconds": 900
     }
   }
 }
 ```
+
+`GET /versions/:versionId/files/:fileId/download` remains available. For normal S3 files it redirects to a presigned download URL instead of streaming the file through Lambda. Legacy multipart upload at `/versions/:versionId/files/upload` remains available for local/Docker usage, but Lambda clients should use presigned uploads.

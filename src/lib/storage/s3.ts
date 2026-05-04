@@ -13,10 +13,14 @@ import { env } from "../../config/env";
 
 const s3Client = new S3Client({
   region: env.s3Region,
-  credentials: {
-    accessKeyId: env.awsAccessKeyId,
-    secretAccessKey: env.awsSecretAccessKey
-  }
+  ...(env.awsAccessKeyId && env.awsSecretAccessKey
+    ? {
+        credentials: {
+          accessKeyId: env.awsAccessKeyId,
+          secretAccessKey: env.awsSecretAccessKey
+        }
+      }
+    : {})
 });
 
 const SEED_ASSET_PREFIX = "seed-assets/";
@@ -167,6 +171,10 @@ export const getSeedAssetBuffer = (storageKey: string) => {
   return buffer;
 };
 
+export const getSeedAssetSizeBytes = (storageKey: string) => {
+  return getSeedAssetBuffer(storageKey)?.length ?? null;
+};
+
 export const getSeedAssetContentType = (storageKey: string) => {
   const extension = path.extname(storageKey).toLowerCase();
 
@@ -193,7 +201,7 @@ export const getSeedAssetContentType = (storageKey: string) => {
   return "application/octet-stream";
 };
 
-const encodeObjectKeyForUrl = (objectKey: string) => {
+export const encodeObjectKeyForUrl = (objectKey: string) => {
   return objectKey
     .split("/")
     .map((segment) => encodeURIComponent(segment))
@@ -255,6 +263,24 @@ export const getSignedFileUrl = async (storageKey: string, expiresInSeconds = 90
     }),
     {
       expiresIn: expiresInSeconds
+    }
+  );
+};
+
+export const getSignedUploadUrl = async (params: {
+  storageKey: string;
+  contentType: string;
+  expiresInSeconds?: number;
+}) => {
+  return getSignedUrl(
+    s3Client,
+    new PutObjectCommand({
+      Bucket: env.s3Bucket,
+      Key: params.storageKey,
+      ContentType: params.contentType
+    }),
+    {
+      expiresIn: params.expiresInSeconds ?? 900
     }
   );
 };
